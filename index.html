@@ -231,6 +231,28 @@
       font-family: 'Inter', sans-serif;
     }
 
+    /* Label + icon on the same baseline */
+    .setting-label-row {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-bottom: 0.35rem;
+    }
+    .setting-label-row .setting-label { margin-bottom: 0; }
+
+    .font-toggle-btn {
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      color: var(--muted);
+      line-height: 0;
+      opacity: 0.7;
+      transition: opacity 0.15s, color 0.15s;
+    }
+    .font-toggle-btn:hover          { opacity: 1; color: var(--text); }
+    .font-toggle-btn.active         { color: var(--text); opacity: 1; }
+
     .setting-row select {
       width: 100%;
       background: transparent;
@@ -484,7 +506,16 @@
 
     <!-- Font family -->
     <div class="setting-row">
-      <span class="setting-label">Font</span>
+      <div class="setting-label-row">
+        <span class="setting-label">Font</span>
+        <button id="font-toggle-btn" class="font-toggle-btn" title="Type a custom font name">
+          <!-- pencil icon -->
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+      </div>
       <select id="s-font">
         <option value="Merriweather">Merriweather</option>
         <option value="Lora">Lora</option>
@@ -492,14 +523,10 @@
         <option value="Inter">Inter</option>
         <option value="DM Sans">DM Sans</option>
         <option value="JetBrains Mono">JetBrains Mono</option>
-        <option value="custom">Custom…</option>
       </select>
-    </div>
-
-    <!-- Custom font name (shown only when Custom… is selected) -->
-    <div class="setting-row" id="custom-font-row" style="display:none">
       <input type="text" class="slider-val" id="s-custom-font"
-             placeholder="Font name, e.g. Georgia" aria-label="Custom font name">
+             placeholder="Font name, e.g. Georgia" aria-label="Custom font name"
+             style="display:none">
     </div>
 
     <!-- Font size -->
@@ -577,7 +604,7 @@
     const sStyleRow        = document.getElementById('s-style-row');
     const sStyleBtns       = document.querySelectorAll('.style-btn');
     const sFont            = document.getElementById('s-font');
-    const sCustomFontRow   = document.getElementById('custom-font-row');
+    const sFontToggleBtn   = document.getElementById('font-toggle-btn');
     const sCustomFontVal   = document.getElementById('s-custom-font');
     const sFontSizeVal     = document.getElementById('s-font-size-val');
     const sLineSpacingVal  = document.getElementById('s-line-spacing-val');
@@ -788,6 +815,17 @@
       document.body.className = `mode-${mode} style-${blankPastStyle}`;
     }
 
+    // Switch the font control between dropdown and free-text input
+    function setFontMode(isCustom) {
+      sFont.style.display        = isCustom ? 'none'  : '';
+      sCustomFontVal.style.display = isCustom ? ''    : 'none';
+      sFontToggleBtn.classList.toggle('active', isCustom);
+      if (isCustom) {
+        sCustomFontVal.focus();
+        sCustomFontVal.select();
+      }
+    }
+
     function applyEditorStyles() {
       const { fontFamily, customFont, fontSize, lineSpacing } = state.settings;
       const ff = fontFamily === 'custom'
@@ -812,8 +850,8 @@
       sModeBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === s.mode));
       sStyleRow.style.display   = s.mode === 'blankpast' ? 'flex' : 'none';
       sStyleBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.style === s.blankPastStyle));
-      sFont.value               = s.fontFamily;
-      sCustomFontRow.style.display = s.fontFamily === 'custom' ? 'block' : 'none';
+      sFont.value               = s.fontFamily === 'custom' ? 'Merriweather' : s.fontFamily;
+      setFontMode(s.fontFamily === 'custom');
       sCustomFontVal.value      = s.customFont || '';
       sFontSizeVal.value        = s.fontSize;
       sLineSpacingVal.value     = s.lineSpacing.toFixed(1);
@@ -949,7 +987,6 @@
 
     function onFontChange() {
       state.settings.fontFamily = sFont.value;
-      sCustomFontRow.style.display = sFont.value === 'custom' ? 'block' : 'none';
       applyEditorStyles();
       scheduleSave();
     }
@@ -1029,6 +1066,17 @@
       sModeBtns.forEach(btn  => btn.addEventListener('click', () => onModeChange(btn.dataset.mode)));
       sStyleBtns.forEach(btn => btn.addEventListener('click', () => onStyleChange(btn.dataset.style)));
       sFont.addEventListener('change',         onFontChange);
+      sFontToggleBtn.addEventListener('click', () => {
+        const goCustom = state.settings.fontFamily !== 'custom';
+        if (goCustom) {
+          state.settings.fontFamily = 'custom';
+        } else {
+          state.settings.fontFamily = sFont.value || 'Merriweather';
+        }
+        setFontMode(goCustom);
+        applyEditorStyles();
+        scheduleSave();
+      });
       sCustomFontVal.addEventListener('input',   onCustomFontInput);
       sCustomFontVal.addEventListener('blur',    onCustomFontInput);
       sCustomFontVal.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); onCustomFontInput(); sCustomFontVal.blur(); } });
