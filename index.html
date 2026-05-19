@@ -642,12 +642,15 @@
       span.dataset.state = dataState;
 
       parseChars(token).forEach(({ ch, struck }) => {
+        // Use non-breaking space for display so trailing spaces aren't collapsed
+        // by the browser (matters in right-aligned typewriter mode)
+        const displayCh = ch === ' ' ? '\u00a0' : ch;
         if (!struck) {
-          span.appendChild(document.createTextNode(ch));
+          span.appendChild(document.createTextNode(displayCh));
           return;
         }
         const s = document.createElement('s');
-        s.textContent = ch;
+        s.textContent = displayCh;
         span.appendChild(s);
       });
 
