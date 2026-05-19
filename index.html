@@ -9,7 +9,7 @@
   <script>
     (function () {
       const _s = localStorage.getItem('narrowwrite_settings');
-      const theme = _s ? (JSON.parse(_s).theme || 'system') : 'system';
+      const theme = _s ? (JSON.parse(_s).theme || 'dark') : 'dark';
       const resolved = theme === 'system'
         ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
         : theme;
@@ -25,13 +25,14 @@
   <style>
     /* ── Tokens ────────────────────────────────────────────────────── */
     :root {
-      --bg:          #1a1a1a;
-      --text:        #e8e4dc;
-      --muted:       rgba(232, 228, 220, 0.45);
-      --border:      rgba(255, 255, 255, 0.1);
-      --popover-bg:  #222222;
-      --blur-amount: 14px;
-      --fade:        180ms ease;
+      --bg:           #1a1a1a;
+      --text:         #e8e4dc;
+      --muted:        rgba(232, 228, 220, 0.45);
+      --border:       rgba(255, 255, 255, 0.1);
+      --popover-bg:   #222222;
+      --blur-amount:  14px;
+      --haze-opacity: 0.75;
+      --fade:         180ms ease;
     }
 
     [data-theme="light"] {
@@ -40,6 +41,17 @@
       --muted:      rgba(26, 26, 26, 0.42);
       --border:     rgba(0, 0, 0, 0.1);
       --popover-bg: #f0ede8;
+    }
+
+    /* High contrast — designed for LCD / e-reader screens */
+    [data-theme="hc"] {
+      --bg:           #ffffff;
+      --text:         #000000;
+      --muted:        #000000;
+      --border:       #000000;
+      --popover-bg:   #ffffff;
+      --haze-opacity: 1;
+      --fade:         0ms;   /* no transitions — prevents e-ink ghosting */
     }
 
     /* ── Reset ─────────────────────────────────────────────────────── */
@@ -94,8 +106,15 @@
     /* narrowwrite mode: one blur on the group container → single GPU op */
     body.mode-narrowwrite #haze-group {
       filter: blur(var(--blur-amount));
-      opacity: 0.55;
+      opacity: var(--haze-opacity);
       will-change: filter;
+    }
+
+    /* HC: replace blur with full hide — no blur artifacts on e-ink/LCD */
+    [data-theme="hc"] body.mode-narrowwrite #haze-group {
+      filter: none;
+      opacity: 0;
+      will-change: auto;
     }
 
     /* blank past classic: fade to invisible, keep layout */
@@ -158,6 +177,10 @@
     }
 
     #settings-btn:hover { opacity: 1; color: var(--text); }
+
+    /* HC: button and word count always fully visible */
+    [data-theme="hc"] #settings-btn      { opacity: 1; color: var(--text); }
+    [data-theme="hc"] #word-count        { opacity: 1; color: var(--text); }
 
     /* ── Settings popover ──────────────────────────────────────────── */
     #settings-panel {
@@ -480,6 +503,7 @@
         <option value="system">System</option>
         <option value="dark">Dark</option>
         <option value="light">Light</option>
+        <option value="hc">High Contrast</option>
       </select>
     </div>
 
@@ -515,7 +539,7 @@
         fontFamily:     'Merriweather',
         fontSize:       18,
         lineSpacing:    1.8,
-        theme:          'system',
+        theme:          'dark',
         typingSounds:   false,
       },
     };
