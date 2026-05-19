@@ -398,7 +398,7 @@
   <div id="editor-container">
     <div id="editor"
          contenteditable="true"
-         spellcheck="true"
+         spellcheck="false"
          autocorrect="on"
          autocapitalize="sentences"
          aria-label="Writing area"
@@ -663,23 +663,58 @@
     // Caps DOM size regardless of how much content exists above the fold.
     const RENDER_BUFFER = 800;
 
+    // ── Incremental render state ────────────────────────────────────────────────
+    // Tracks last full-render result so typing within a word skips full rebuild.
+    let _renderTokenCount  = 0;
+    let _renderVisibleFrom = -1;
+    let _currentWordSpan   = null;
+
+    function invalidateRenderCache() {
+      _currentWordSpan = null;
+    }
+
     function renderWords() {
       const tokens      = tokenise(state.content);
       const totalWords  = countWords(tokens);
       const visibleFrom = findVisibleStart(tokens, state.settings.visibleWords);
+      const isTypewriter = state.settings.mode === 'blankpast' &&
+                           state.settings.blankPastStyle === 'typewriter';
 
-      // Only render from renderFrom — skip tokens that are too far above the fold
-      const renderFrom = Math.max(0, visibleFrom - RENDER_BUFFER);
-
-      const fragment = document.createDocumentFragment();
-      for (let i = renderFrom; i < tokens.length; i++) {
-        fragment.appendChild(renderToken(tokens[i], i >= visibleFrom ? 'visible' : 'hidden'));
+      // ── Fast path ────────────────────────────────────────────────────────────
+      // Applies when the user typed a character within the current word:
+      //   • token count unchanged  → no word boundary crossed
+      //   • visibleFrom unchanged  → visible window didn't shift
+      //   • not typewriter         → typewriter needs full rebuild (struck chars)
+      //   • span ref valid         → we have a live node to update
+      if (
+        !isTypewriter &&
+        _currentWordSpan &&
+        tokens.length === _renderTokenCount &&
+        visibleFrom  === _renderVisibleFrom
+      ) {
+        _currentWordSpan.textContent =
+          tokens[tokens.length - 1].replace(/ /g, '\u00a0');
+        updateWordCount(totalWords);
+        return;
       }
 
+      // ── Full re-render ────────────────────────────────────────────────────────
+      const renderFrom = Math.max(0, visibleFrom - RENDER_BUFFER);
+      const fragment   = document.createDocumentFragment();
+      for (let i = renderFrom; i < tokens.length; i++) {
+        fragment.appendChild(
+          renderToken(tokens[i], i >= visibleFrom ? 'visible' : 'hidden')
+        );
+      }
       editor.innerHTML = '';
       editor.appendChild(fragment);
-
       trimOverflow();
+
+      // Cache for next incremental check
+      _renderTokenCount  = tokens.length;
+      _renderVisibleFrom = visibleFrom;
+      _currentWordSpan   = editor.lastElementChild;
+
       updateWordCount(totalWords);
     }
 
@@ -894,6 +929,7 @@
 
     function onModeChange(mode) {
       state.settings.mode = mode;
+      invalidateRenderCache();
       sModeBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode));
       sStyleRow.style.display = mode === 'blankpast' ? 'flex' : 'none';
       applyBodyClasses();
@@ -903,6 +939,7 @@
 
     function onStyleChange(style) {
       state.settings.blankPastStyle = style;
+      invalidateRenderCache();
       sStyleBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.style === style));
       applyBodyClasses();
       renderWords();
