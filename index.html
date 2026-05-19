@@ -97,10 +97,11 @@
       text-decoration-thickness: 1px;
     }
 
-    /* narrowwrite mode: heavy blur, color stays visible */
-    body.mode-narrowwrite .word[data-state="hidden"] {
+    /* narrowwrite mode: one blur on the group container → single GPU op */
+    body.mode-narrowwrite #haze-group {
       filter: blur(var(--blur-amount));
       opacity: 0.55;
+      will-change: filter;
     }
 
     /* blank past classic: fade to invisible, keep layout */
@@ -699,12 +700,25 @@
       }
 
       // ── Full re-render ────────────────────────────────────────────────────────
+      // In Haze mode, wrap all hidden tokens in one container and blur that
+      // container — one GPU composite op instead of one per hidden span.
       const renderFrom = Math.max(0, visibleFrom - RENDER_BUFFER);
-      const fragment   = document.createDocumentFragment();
+      const isHaze     = state.settings.mode === 'narrowwrite';
+      const hazeGroup  = isHaze ? document.createElement('span') : null;
+      if (hazeGroup) hazeGroup.id = 'haze-group';
+
+      const fragment = document.createDocumentFragment();
       for (let i = renderFrom; i < tokens.length; i++) {
-        fragment.appendChild(
-          renderToken(tokens[i], i >= visibleFrom ? 'visible' : 'hidden')
-        );
+        const tok = renderToken(tokens[i], i >= visibleFrom ? 'visible' : 'hidden');
+        if (i < visibleFrom && hazeGroup) {
+          hazeGroup.appendChild(tok);
+        } else {
+          fragment.appendChild(tok);
+        }
+      }
+
+      if (hazeGroup && hazeGroup.hasChildNodes()) {
+        fragment.prepend(hazeGroup);
       }
       editor.innerHTML = '';
       editor.appendChild(fragment);
