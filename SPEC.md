@@ -1,16 +1,16 @@
-# narrowwrite — Product Specification
+# Narrow Write — Product Specification
 
 ## 1. Overview
 
-**narrowwrite** is a distraction-free writing tool that combats mind-wandering by limiting how many words are visible on screen at any one time. The less you see, the more you focus on what you're actually writing.
+**Narrow Write** is a distraction-free writing tool that combats mind-wandering by limiting how many words are visible on screen at any one time. The less you see, the more you focus on what you're actually writing.
 
 There is no formatting. No toolbar. No sidebar. Just words.
 
-**Browser tab title:** `narrowwrite — write without looking back`
+**Browser tab title:** `Narrow Write — write without looking back`
 
 ### Problem
 
-When writing, having a full page of text visible creates cognitive noise — the eye wanders, the writer edits instead of drafts, momentum breaks. narrowwrite solves this by hiding or blurring everything except the most recent N words.
+When writing, having a full page of text visible creates cognitive noise — the eye wanders, the writer edits instead of drafts, momentum breaks. Narrow Write solves this by hiding or blurring everything except the most recent N words.
 
 ### Target Users
 
@@ -53,13 +53,13 @@ Two modes control what happens to words beyond the visible limit:
 
 | Mode | Behavior |
 |------|----------|
-| **narrowwrite** | Older words remain on screen but are heavily blurred — present but fully unreadable |
+| **narrow-write** | Older words remain on screen but are heavily blurred — the color should remain visible (not fade to near-black), just unreadable |
 | **Blank Past** | Older words disappear entirely; two typing styles available (see below) |
 
-- Default mode: **narrowwrite**
+- Default mode: **narrow-write**
 - The user selects their preferred mode from the settings panel
 
-#### narrowwrite mode — Enter key
+#### narrow-write mode — Enter key
 
 Pressing Enter creates a new line as normal. Line breaks are counted as word boundaries.
 
@@ -77,7 +77,17 @@ When **Blank Past** is active, a secondary toggle in the config panel lets the u
 
 #### Blank Past — Typewriter Style — Cursor Position
 
-In Typewriter style, the cursor is anchored at **dead center horizontally and vertically** on screen. As the user types, words flow left and disappear off the left edge. The cursor never moves.
+In Typewriter style, the cursor is anchored at **dead center horizontally and vertically** on screen. As the user types, each new letter appears at the cursor (screen center) and the existing text shifts left — the cursor itself never moves. Words that go beyond the word count limit, or that drift off the left edge of the screen, disappear. The effect is that the user always types at the same fixed point while their writing streams away to the left.
+
+#### Blank Past — Typewriter Style — Backspace behavior
+
+In Typewriter style, **backspace does not delete**. Instead:
+
+- Each backspace press adds a **strikethrough** to the most recent non-struck, non-whitespace character
+- The cursor stays fixed at screen center — nothing is removed, nothing shifts
+- Struck characters remain in the content — they are part of the document
+- Struck characters are **preserved when copying** — the copy output uses the Unicode combining strikethrough character (`U+0336`) so the strikethrough is visible in any app that supports it
+- Only non-whitespace characters can be struck — spaces and line breaks are skipped
 
 #### Blank Past — Enter key
 
@@ -90,7 +100,7 @@ Accessible via a **sliders icon in the top-right corner** of the screen, always 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | **Visible word count (N)** | 10 | Number of words shown at once; range 1–100 |
-| **Visibility mode** | narrowwrite | narrowwrite or Blank Past |
+| **Visibility mode** | narrow-write | Narrow Write or Blank Past |
 | **Blank Past style** | Classic | Typewriter or Classic (only shown when Blank Past is active) |
 | **Font family** | — | Curated list of 6–9 fonts (see §4 Visual Design) |
 | **Font size** | 18px | Controls the size of the writing text |
@@ -126,10 +136,10 @@ Settings are persisted to `localStorage`.
 
 ### Flow
 
-1. User opens narrowwrite in a browser
+1. User opens Narrow Write in a browser
 2. Previous session text is restored (if any); blank canvas if first visit
 3. User begins typing immediately — no onboarding, no sign-in, no placeholder
-4. Older words beyond N fade out and are blurred (narrowwrite mode) or hidden (Blank Past mode)
+4. Older words beyond N fade out and are blurred (narrow-write mode) or hidden (Blank Past mode)
 5. In Blank Past + Typewriter style, the cursor stays at dead center (horizontally and vertically); words flow left and vanish
 6. Backspacing shifts the window back — previously hidden/blurred text becomes visible again
 7. User clicks the sliders icon (top-right) to open the floating settings popover
@@ -154,7 +164,7 @@ Settings are persisted to `localStorage`.
 | Writing area width | Full window width |
 | Writing text alignment | Left-aligned |
 | Writing area padding | Generous on all sides |
-| Blur intensity | Heavy — fully unreadable |
+| Blur intensity | Heavy blur — text is unreadable but color remains visible (not dark/faded) |
 | Word disappear animation | Fade out (CSS transition) |
 | Mode switch animation | Smooth fade between modes |
 | Cursor (caret) style | Slow pulsing |
@@ -164,7 +174,7 @@ Settings are persisted to `localStorage`.
 | Settings icon | Sliders icon, top-right, small and subtle |
 | Settings panel style | Narrow floating popover (~260px), fades in, closes on outside click |
 | Keyboard shortcuts | None |
-| Browser tab title | `narrowwrite — write without looking back` |
+| Browser tab title | `Narrow Write — write without looking back` |
 
 ### Font Library
 
@@ -216,7 +226,7 @@ Default font: **Merriweather** (serif).
   "narrowwrite_content": "<full plain text>",
   "narrowwrite_settings": {
     "visibleWords": 10,
-    "mode": "narrowwrite",
+    "mode": "narrow-write",
     "blankPastStyle": "classic",
     "fontFamily": "Merriweather",
     "fontSize": 18,
@@ -281,7 +291,7 @@ const state = {
   content: '',
   settings: {
     visibleWords: 10,
-    mode: 'narrowwrite',       // 'narrowwrite' | 'blankpast'
+    mode: 'narrow-write',       // 'narrow-write' | 'blankpast'
     blankPastStyle: 'classic', // 'classic' | 'typewriter'
     fontFamily: 'Merriweather',
     fontSize: 18,
@@ -311,7 +321,7 @@ On every keystroke:
 ### localStorage Writes
 
 - All writes are **debounced at 500ms** — typing quickly does not hammer storage
-- `saveState()` writes both `narrowwrite_content` and `narrowwrite_settings`
+- `saveState()` writes both `narrow-write_content` and `narrow-write_settings`
 - `loadState()` is called once on startup and populates `state`
 
 ### Typing Sounds
@@ -338,7 +348,7 @@ All icons are **inline SVG** — no icon library dependency, no CDN request.
 |---------|-------------|
 | Visible word count (N) | Range slider + number display |
 | Visibility mode | Dropdown select |
-| Blank Past style | Dropdown select (hidden when mode is narrowwrite) |
+| Blank Past style | Dropdown select (hidden when mode is narrow-write) |
 | Font family | Dropdown select |
 | Font size | Range slider + number display |
 | Line spacing | Range slider + number display |

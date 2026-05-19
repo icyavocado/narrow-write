@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Narrow Write — write without looking back</title>
+
+  <!-- Apply theme before render to prevent flash -->
+  <script>
+    (function () {
+      const _s = localStorage.getItem('narrowwrite_settings');
+      const theme = _s ? (JSON.parse(_s).theme || 'system') : 'system';
+      const resolved = theme === 'system'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : theme;
+      document.documentElement.setAttribute('data-theme', resolved);
+    })();
+  </script>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+
+  <style>
+    /* ── Tokens ────────────────────────────────────────────────────── */
+    :root {
+      --bg:          #1a1a1a;
+      --text:        #e8e4dc;
+      --muted:       rgba(232, 228, 220, 0.45);
+      --border:      rgba(255, 255, 255, 0.1);
+      --popover-bg:  #222222;
+      --blur-amount: 14px;
+      --fade:        180ms ease;
+    }
+
+    [data-theme="light"] {
+      --bg:         #faf8f5;
+      --text:       #1a1a1a;
+      --muted:      rgba(26, 26, 26, 0.42);
+      --border:     rgba(0, 0, 0, 0.1);
+      --popover-bg: #f0ede8;
+    }
+
+    /* ── Reset ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      transition: background var(--fade), color var(--fade);
+    }
+
+    /* ── Writing area ──────────────────────────────────────────────── */
+    #editor-container {
+      position: fixed;
+      inset: 0;
+      padding: 3rem;
+      display: flex;
+      align-items: flex-start;
+    }
+
+    #editor {
+      width: 100%;
+      min-height: 1.5em;
+      outline: none;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1.8;
+      font-family: 'Merriweather', serif;
+      white-space: pre-wrap;
+      word-break: break-word;
+      caret-color: var(--text);
+    }
+
+    /* Slow pulsing caret */
+    @keyframes caret-pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+    #editor:focus { caret-color: var(--text); animation: none; }
+
+    /* ── Word spans ────────────────────────────────────────────────── */
+    .word {
+      transition: opacity var(--fade), filter var(--fade);
+    }
+
+    /* struck characters inside a word span */
+    .word s {
+      text-decoration: line-through;
+      text-decoration-color: inherit;
+      text-decoration-thickness: 1px;
+    }
+
+    /* narrowwrite mode: heavy blur, color stays visible */
+    body.mode-narrowwrite .word[data-state="hidden"] {
+      filter: blur(var(--blur-amount));
+      opacity: 0.55;
+    }
+
+    /* blank past classic: fade to invisible, keep layout */
+    body.mode-blankpast.style-classic .word[data-state="hidden"] {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* blank past typewriter: remove from layout so visible words shift */
+    body.mode-blankpast.style-typewriter .word[data-state="hidden"] {
+      display: none;
+    }
+
+    /* ── Typewriter layout ─────────────────────────────────────────── */
+    body.mode-blankpast.style-typewriter #editor-container {
+      /* Occupy exactly the left half — right edge sits at screen center */
+      left: 0;
+      right: 50%;
+      top: 0;
+      bottom: 0;
+      padding: 0 1rem;
+      align-items: center;     /* vertical center */
+      overflow: hidden;        /* clip text that exceeds left edge */
+    }
+
+    body.mode-blankpast.style-typewriter #editor {
+      width: 100%;             /* fill the left-half container */
+      white-space: nowrap;     /* single line — no wrapping */
+      word-break: normal;
+      text-align: right;       /* cursor pinned to right edge = screen center */
+    }
+
+    /* ── Word count ────────────────────────────────────────────────── */
+    #word-count {
+      position: fixed;
+      bottom: 1.25rem;
+      right: 1.5rem;
+      font-size: 0.7rem;
+      font-family: 'Inter', sans-serif;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      user-select: none;
+      pointer-events: none;
+    }
+
+    /* ── Settings button ───────────────────────────────────────────── */
+    #settings-btn {
+      position: fixed;
+      top: 0.875rem;
+      right: 1rem;
+      background: none;
+      border: none;
+      padding: 0.375rem;
+      cursor: pointer;
+      color: var(--muted);
+      line-height: 0;
+      transition: color 0.2s, opacity 0.2s;
+      opacity: 0.5;
+      z-index: 200;
+    }
+
+    #settings-btn:hover { opacity: 1; color: var(--text); }
+
+    /* ── Settings popover ──────────────────────────────────────────── */
+    #settings-panel {
+      position: fixed;
+      top: 3.25rem;
+      right: 1rem;
+      width: 260px;
+      background: var(--popover-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      z-index: 100;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      max-height: calc(100dvh - 5rem);
+      overflow-y: auto;
+
+      /* hidden by default */
+      display: none;
+      opacity: 0;
+      transform: translateY(-6px);
+      transition: opacity 0.15s ease, transform 0.15s ease;
+    }
+
+    #settings-panel.open    { display: block; }
+    #settings-panel.visible { opacity: 1; transform: translateY(0); }
+
+    /* ── Setting rows ──────────────────────────────────────────────── */
+    .setting-row { margin-bottom: 0.9rem; }
+
+    .setting-label {
+      display: block;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .setting-row select {
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 5px;
+      padding: 0.3rem 0.5rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    .setting-row select option { background: var(--popover-bg); color: var(--text); }
+
+    /* Val-with-unit wrapper (e.g. font size + "px") */
+    .val-with-unit {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 0.3rem 0.5rem;
+      transition: border-color 0.15s;
+    }
+
+    .val-with-unit:focus-within {
+      border-color: var(--text);
+    }
+
+    .val-unit {
+      font-size: 12px;
+      color: var(--muted);
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+      pointer-events: none;
+    }
+
+    .slider-val {
+      font-size: 12px;
+      color: var(--text);
+      min-width: 0;
+      width: 100%;
+      font-family: 'Inter', sans-serif;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      outline: none;
+      padding: 0.3rem 0.5rem;
+      cursor: text;
+      transition: border-color 0.15s;
+    }
+
+    /* Inside a val-with-unit, the input is borderless — wrapper holds the border */
+    .val-with-unit .slider-val {
+      border: none;
+      border-radius: 0;
+      padding: 0;
+      flex: 1;
+    }
+
+    .slider-val:focus {
+      border-color: var(--text);
+    }
+
+    .val-with-unit .slider-val:focus {
+      border-color: transparent;
+    }
+
+    /* Toggle rows */
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .toggle-row input[type="checkbox"] { cursor: pointer; }
+
+    /* Divider */
+    .setting-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0.75rem 0;
+    }
+
+    /* Action buttons */
+    .action-btn {
+      width: 100%;
+      padding: 0.4rem 0.5rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      font-size: 0.78rem;
+      cursor: pointer;
+      text-align: center;
+      display: block;
+      transition: background 0.15s;
+      margin-bottom: 0.5rem;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .action-btn:hover { background: rgba(128, 128, 128, 0.12); }
+
+    .action-btn.danger       { color: #e06060; border-color: rgba(224, 96, 96, 0.35); }
+    .action-btn.danger:hover { background: rgba(224, 96, 96, 0.1); }
+
+    /* Clear confirm area */
+    #clear-confirm {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+      line-height: 1.4;
+    }
+
+    #clear-confirm-btns {
+      display: flex;
+      gap: 0.4rem;
+    }
+
+    #clear-confirm-btns .action-btn { margin-bottom: 0; flex: 1; }
+
+    /* ── Mobile adjustments ────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      #editor-container { padding: 2rem 1.25rem; }
+      #editor { font-size: 16px; }
+      #settings-panel { right: 0.5rem; width: calc(100vw - 1rem); }
+    }
+  </style>
+</head>
+
+<body class="mode-narrowwrite style-classic">
+
+  <!-- Writing area -->
+  <div id="editor-container">
+    <div id="editor"
+         contenteditable="true"
+         spellcheck="true"
+         autocorrect="on"
+         autocapitalize="sentences"
+         aria-label="Writing area"
+         aria-multiline="true"
+         role="textbox"></div>
+  </div>
+
+  <!-- Word count -->
+  <div id="word-count" aria-live="polite" aria-atomic="true">0</div>
+
+  <!-- Settings button -->
+  <button id="settings-btn" aria-label="Open settings" aria-expanded="false">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <line x1="4"  y1="21" x2="4"  y2="14"/>
+      <line x1="4"  y1="10" x2="4"  y2="3"/>
+      <line x1="12" y1="21" x2="12" y2="12"/>
+      <line x1="12" y1="8"  x2="12" y2="3"/>
+      <line x1="20" y1="21" x2="20" y2="16"/>
+      <line x1="20" y1="12" x2="20" y2="3"/>
+      <line x1="1"  y1="14" x2="7"  y2="14"/>
+      <line x1="9"  y1="8"  x2="15" y2="8"/>
+      <line x1="17" y1="16" x2="23" y2="16"/>
+    </svg>
+  </button>
+
+  <!-- Settings popover -->
+  <div id="settings-panel" role="dialog" aria-label="Settings">
+
+    <!-- Visible words -->
+    <div class="setting-row">
+      <span class="setting-label">Visible words</span>
+      <input type="text" class="slider-val" id="s-visible-words-val" value="10" aria-label="Visible words value">
+    </div>
+
+    <!-- Mode -->
+    <div class="setting-row">
+      <span class="setting-label">Mode</span>
+      <select id="s-mode">
+        <option value="narrowwrite">Narrow Write</option>
+        <option value="blankpast">Blank Past</option>
+      </select>
+    </div>
+
+    <!-- Blank Past style (shown only in Blank Past mode) -->
+    <div class="setting-row" id="s-style-row">
+      <span class="setting-label">Blank Past style</span>
+      <select id="s-style">
+        <option value="classic">Classic</option>
+        <option value="typewriter">Typewriter</option>
+      </select>
+    </div>
+
+    <!-- Font family -->
+    <div class="setting-row">
+      <span class="setting-label">Font</span>
+      <select id="s-font">
+        <option value="Merriweather">Merriweather</option>
+        <option value="Lora">Lora</option>
+        <option value="Playfair Display">Playfair Display</option>
+        <option value="Inter">Inter</option>
+        <option value="DM Sans">DM Sans</option>
+        <option value="JetBrains Mono">JetBrains Mono</option>
+      </select>
+    </div>
+
+    <!-- Font size -->
+    <div class="setting-row">
+      <span class="setting-label">Font size</span>
+      <div class="val-with-unit">
+        <input type="text" class="slider-val" id="s-font-size-val" value="18" aria-label="Font size">
+        <span class="val-unit">px</span>
+      </div>
+    </div>
+
+    <!-- Line spacing -->
+    <div class="setting-row">
+      <span class="setting-label">Line spacing</span>
+      <input type="text" class="slider-val" id="s-line-spacing-val" value="1.8" aria-label="Line spacing value">
+    </div>
+
+    <!-- Theme -->
+    <div class="setting-row">
+      <span class="setting-label">Theme</span>
+      <select id="s-theme">
+        <option value="system">System</option>
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+      </select>
+    </div>
+
+    <!-- Typing sounds (wired up when audio file is provided) -->
+    <div class="setting-row">
+      <div class="toggle-row">
+        <span class="setting-label" style="margin:0">Typing sounds</span>
+        <input type="checkbox" id="s-sounds" role="switch" disabled title="Coming soon">
+      </div>
+    </div>
+
+    <hr class="setting-divider">
+
+    <!-- Copy all -->
+    <button class="action-btn" id="copy-btn">Copy all</button>
+
+    <!-- Clear document -->
+    <div id="clear-area">
+      <button class="action-btn danger" id="clear-btn">Clear document</button>
+    </div>
+
+  </div>
+
+  <script>
+    // ── State ──────────────────────────────────────────────────────────────────
+
+    const state = {
+      content: '',
+      settings: {
+        visibleWords:   10,
+        mode:           'narrowwrite',
+        blankPastStyle: 'classic',
+        fontFamily:     'Merriweather',
+        fontSize:       18,
+        lineSpacing:    1.8,
+        theme:          'system',
+        typingSounds:   false,
+      },
+    };
+
+    // ── DOM refs ───────────────────────────────────────────────────────────────
+
+    const editor        = document.getElementById('editor');
+    const wordCountEl   = document.getElementById('word-count');
+    const settingsBtn   = document.getElementById('settings-btn');
+    const settingsPanel = document.getElementById('settings-panel');
+
+    const sVisibleWordsVal = document.getElementById('s-visible-words-val');
+    const sMode            = document.getElementById('s-mode');
+    const sStyleRow        = document.getElementById('s-style-row');
+    const sStyle           = document.getElementById('s-style');
+    const sFont            = document.getElementById('s-font');
+    const sFontSizeVal     = document.getElementById('s-font-size-val');
+    const sLineSpacingVal  = document.getElementById('s-line-spacing-val');
+    const sTheme           = document.getElementById('s-theme');
+    const sSounds          = document.getElementById('s-sounds');
+    const copyBtn          = document.getElementById('copy-btn');
+    const clearArea        = document.getElementById('clear-area');
+
+    // Font stacks per family
+    const fontStacks = {
+      'Merriweather':    "'Merriweather', Georgia, serif",
+      'Lora':            "'Lora', Georgia, serif",
+      'Playfair Display':"'Playfair Display', Georgia, serif",
+      'Inter':           "'Inter', system-ui, sans-serif",
+      'DM Sans':         "'DM Sans', system-ui, sans-serif",
+      'JetBrains Mono':  "'JetBrains Mono', monospace",
+    };
+
+    // ── localStorage ───────────────────────────────────────────────────────────
+
+    function loadState() {
+      const savedContent  = localStorage.getItem('narrowwrite_content');
+      const savedSettings = localStorage.getItem('narrowwrite_settings');
+
+      if (savedContent)  state.content = savedContent;
+      if (!savedSettings) return;
+
+      Object.assign(state.settings, JSON.parse(savedSettings));
+    }
+
+    let saveTimer = null;
+
+    function scheduleSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveState, 500);
+    }
+
+    function saveState() {
+      localStorage.setItem('narrowwrite_content',  state.content);
+      localStorage.setItem('narrowwrite_settings', JSON.stringify(state.settings));
+    }
+
+    // ── Word rendering ─────────────────────────────────────────────────────────
+
+    // Split into alternating [word, whitespace, word, …] tokens
+    function tokenise(text) {
+      return text.split(/(\s+)/).filter(t => t.length > 0);
+    }
+
+    function isWhitespace(token) {
+      return /^\s+$/.test(token);
+    }
+
+    function countWords(tokens) {
+      return tokens.filter(t => !isWhitespace(t)).length;
+    }
+
+    // Find the token index where the visible window starts
+    function findVisibleStart(tokens, visibleWords) {
+      let wordsSeen = 0;
+
+      for (let i = tokens.length - 1; i >= 0; i--) {
+        if (isWhitespace(tokens[i])) continue;
+        wordsSeen++;
+        if (wordsSeen >= visibleWords) return i;
+      }
+
+      return 0;
+    }
+
+    // ── Struck character helpers ───────────────────────────────────────────────
+
+    // Parse a string containing U+0336 combining chars into {ch, struck} objects
+    function parseChars(text) {
+      const chars = [];
+      let i = 0;
+
+      while (i < text.length) {
+        const struck = i + 1 < text.length && text[i + 1] === '\u0336';
+        chars.push({ ch: text[i], struck });
+        i += struck ? 2 : 1;
+      }
+
+      return chars;
+    }
+
+    // Add a strikethrough to the last non-struck, non-whitespace character
+    function addStrike() {
+      const chars = parseChars(state.content);
+
+      for (let i = chars.length - 1; i >= 0; i--) {
+        if (chars[i].struck) continue;
+        if (/\s/.test(chars[i].ch)) continue;
+        chars[i].struck = true;
+        break;
+      }
+
+      state.content = chars.map(c => c.struck ? c.ch + '\u0336' : c.ch).join('');
+    }
+
+    // Build a .word span, rendering struck chars as <s> elements
+    function renderToken(token, dataState) {
+      const span = document.createElement('span');
+      span.className = 'word';
+      span.dataset.state = dataState;
+
+      parseChars(token).forEach(({ ch, struck }) => {
+        if (!struck) {
+          span.appendChild(document.createTextNode(ch));
+          return;
+        }
+        const s = document.createElement('s');
+        s.textContent = ch;
+        span.appendChild(s);
+      });
+
+      return span;
+    }
+
+    function renderWords() {
+      const tokens      = tokenise(state.content);
+      const totalWords  = countWords(tokens);
+      const visibleFrom = findVisibleStart(tokens, state.settings.visibleWords);
+
+      const fragment = document.createDocumentFragment();
+
+      tokens.forEach((token, i) => {
+        const dataState = i >= visibleFrom ? 'visible' : 'hidden';
+        fragment.appendChild(renderToken(token, dataState));
+      });
+
+      editor.innerHTML = '';
+      editor.appendChild(fragment);
+
+      updateWordCount(totalWords);
+    }
+
+    function updateWordCount(count) {
+      wordCountEl.textContent = count;
+    }
+
+    // ── Cursor ─────────────────────────────────────────────────────────────────
+
+    function placeCursorAtEnd() {
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    // ── Apply settings to DOM ──────────────────────────────────────────────────
+
+    function applyBodyClasses() {
+      const { mode, blankPastStyle } = state.settings;
+      document.body.className = `mode-${mode} style-${blankPastStyle}`;
+    }
+
+    function applyEditorStyles() {
+      const { fontFamily, fontSize, lineSpacing } = state.settings;
+      editor.style.fontFamily = fontStacks[fontFamily] || fontStacks['Merriweather'];
+      editor.style.fontSize   = `${fontSize}px`;
+      editor.style.lineHeight = lineSpacing;
+    }
+
+    function applyTheme() {
+      const theme = state.settings.theme;
+      const resolved = theme === 'system'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : theme;
+      document.documentElement.setAttribute('data-theme', resolved);
+    }
+
+    function syncControls() {
+      const s = state.settings;
+      sVisibleWordsVal.value    = s.visibleWords;
+      sMode.value               = s.mode;
+      sStyle.value              = s.blankPastStyle;
+      sStyleRow.style.display   = s.mode === 'blankpast' ? 'block' : 'none';
+      sFont.value               = s.fontFamily;
+      sFontSizeVal.value        = s.fontSize;
+      sLineSpacingVal.value     = s.lineSpacing.toFixed(1);
+      sTheme.value              = s.theme;
+      sSounds.checked           = s.typingSounds;
+    }
+
+    function applySettings() {
+      applyBodyClasses();
+      applyEditorStyles();
+      applyTheme();
+      syncControls();
+    }
+
+    // ── Settings panel ─────────────────────────────────────────────────────────
+
+    function openSettings() {
+      settingsPanel.classList.add('open');
+      settingsBtn.setAttribute('aria-expanded', 'true');
+      requestAnimationFrame(() => settingsPanel.classList.add('visible'));
+    }
+
+    function closeSettings() {
+      settingsPanel.classList.remove('visible');
+      settingsBtn.setAttribute('aria-expanded', 'false');
+      settingsPanel.addEventListener('transitionend', () => {
+        settingsPanel.classList.remove('open');
+      }, { once: true });
+    }
+
+    function isSettingsOpen() {
+      return settingsPanel.classList.contains('open');
+    }
+
+    // ── Copy all ───────────────────────────────────────────────────────────────
+
+    function copyAll() {
+      navigator.clipboard.writeText(state.content).then(() => {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy all'; }, 1500);
+      });
+    }
+
+    // ── Clear document ─────────────────────────────────────────────────────────
+
+    function showClearConfirm() {
+      clearArea.innerHTML = `
+        <p id="clear-confirm">Are you sure? This cannot be undone.</p>
+        <div id="clear-confirm-btns">
+          <button class="action-btn danger" id="confirm-clear-btn">Yes, clear</button>
+          <button class="action-btn" id="cancel-clear-btn">Cancel</button>
+        </div>
+      `;
+      document.getElementById('confirm-clear-btn').addEventListener('click', confirmClear);
+      document.getElementById('cancel-clear-btn').addEventListener('click', resetClearArea);
+    }
+
+    function confirmClear() {
+      state.content = '';
+      editor.innerHTML = '';
+      updateWordCount(0);
+      saveState();
+      resetClearArea();
+      closeSettings();
+      editor.focus();
+    }
+
+    function resetClearArea() {
+      clearArea.innerHTML = `<button class="action-btn danger" id="clear-btn">Clear document</button>`;
+      document.getElementById('clear-btn').addEventListener('click', showClearConfirm);
+    }
+
+    // ── Input handling ─────────────────────────────────────────────────────────
+
+    function handleInput(e) {
+      const isTypewriter = state.settings.mode === 'blankpast' && state.settings.blankPastStyle === 'typewriter';
+
+      if (isTypewriter) {
+        // Never read from DOM in typewriter mode — struck chars live in state.content
+        // as U+0336 combining chars, which the DOM can't round-trip through textContent
+        if (e.data) state.content += e.data;
+      } else {
+        state.content = editor.textContent;
+      }
+
+      renderWords();
+      placeCursorAtEnd();
+      scheduleSave();
+    }
+
+    function handleKeydown(e) {
+      // Intercept Enter in Blank Past — record it but don't render a visible line break
+      if (state.settings.mode === 'blankpast' && e.key === 'Enter') {
+        e.preventDefault();
+        state.content += '\n';
+        renderWords();
+        placeCursorAtEnd();
+        scheduleSave();
+        return;
+      }
+
+      // Intercept Backspace in Typewriter — strike the last char instead of deleting
+      if (state.settings.mode === 'blankpast' && state.settings.blankPastStyle === 'typewriter' && e.key === 'Backspace') {
+        e.preventDefault();
+        addStrike();
+        renderWords();
+        placeCursorAtEnd();
+        scheduleSave();
+        return;
+      }
+    }
+
+    function handlePaste(e) {
+      e.preventDefault();
+      const text = e.clipboardData.getData('text/plain');
+
+      const isTypewriter = state.settings.mode === 'blankpast' && state.settings.blankPastStyle === 'typewriter';
+
+      if (isTypewriter) {
+        state.content += text;
+        renderWords();
+        placeCursorAtEnd();
+        scheduleSave();
+        return;
+      }
+
+      document.execCommand('insertText', false, text);
+    }
+
+    // ── Settings change handlers ───────────────────────────────────────────────
+
+    function onModeChange() {
+      state.settings.mode = sMode.value;
+      sStyleRow.style.display = state.settings.mode === 'blankpast' ? 'block' : 'none';
+      applyBodyClasses();
+      renderWords();
+      scheduleSave();
+    }
+
+    function onStyleChange() {
+      state.settings.blankPastStyle = sStyle.value;
+      applyBodyClasses();
+      renderWords();
+      scheduleSave();
+    }
+
+    function onFontChange() {
+      state.settings.fontFamily = sFont.value;
+      editor.style.fontFamily = fontStacks[state.settings.fontFamily];
+      scheduleSave();
+    }
+
+    function onVisibleWordsValInput() {
+      const raw = parseInt(sVisibleWordsVal.value, 10);
+      if (isNaN(raw)) return;
+      const clamped = Math.min(100, Math.max(1, raw));
+      state.settings.visibleWords = clamped;
+      sVisibleWordsVal.value      = clamped;
+      renderWords();
+      scheduleSave();
+    }
+
+    function onFontSizeValInput() {
+      const raw = parseInt(sFontSizeVal.value, 10);
+      if (isNaN(raw)) return;
+      const clamped = Math.min(99, Math.max(8, raw));
+      state.settings.fontSize = clamped;
+      sFontSizeVal.value      = clamped;
+      editor.style.fontSize   = `${clamped}px`;
+      scheduleSave();
+    }
+
+    function onLineSpacingValInput() {
+      const raw = parseFloat(sLineSpacingVal.value);
+      if (isNaN(raw)) return;
+      const clamped = Math.min(3.0, Math.max(1.0, parseFloat(raw.toFixed(1))));
+      state.settings.lineSpacing = clamped;
+      sLineSpacingVal.value      = clamped.toFixed(1);
+      editor.style.lineHeight    = clamped;
+      scheduleSave();
+    }
+
+    function onSliderValKeydown(e, applyFn) {
+      if (e.key === 'Enter') { e.preventDefault(); applyFn(); e.target.blur(); }
+      if (e.key === 'Escape') { e.preventDefault(); syncControls(); e.target.blur(); }
+    }
+
+    function onThemeChange() {
+      state.settings.theme = sTheme.value;
+      applyTheme();
+      scheduleSave();
+    }
+
+    // ── Wire events ────────────────────────────────────────────────────────────
+
+    function wireEvents() {
+      editor.addEventListener('input',   handleInput);
+      editor.addEventListener('keydown', handleKeydown);
+      editor.addEventListener('paste',   handlePaste);
+
+      settingsBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        isSettingsOpen() ? closeSettings() : openSettings();
+      });
+
+      document.addEventListener('click', e => {
+        if (!isSettingsOpen()) return;
+        if (settingsPanel.contains(e.target)) return;
+        if (e.target === settingsBtn) return;
+        closeSettings();
+      });
+
+      sVisibleWordsVal.addEventListener('blur',    onVisibleWordsValInput);
+      sVisibleWordsVal.addEventListener('keydown', e => onSliderValKeydown(e, onVisibleWordsValInput));
+      sMode.addEventListener('change',         onModeChange);
+      sStyle.addEventListener('change',        onStyleChange);
+      sFont.addEventListener('change',         onFontChange);
+      sFontSizeVal.addEventListener('blur',    onFontSizeValInput);
+      sFontSizeVal.addEventListener('keydown', e => onSliderValKeydown(e, onFontSizeValInput));
+      sLineSpacingVal.addEventListener('blur',    onLineSpacingValInput);
+      sLineSpacingVal.addEventListener('keydown', e => onSliderValKeydown(e, onLineSpacingValInput));
+      sTheme.addEventListener('change',        onThemeChange);
+
+      // Keep System theme in sync when OS preference changes
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if (state.settings.theme === 'system') applyTheme();
+      });
+      copyBtn.addEventListener('click',        copyAll);
+      document.getElementById('clear-btn').addEventListener('click', showClearConfirm);
+    }
+
+    // ── Startup ────────────────────────────────────────────────────────────────
+
+    function init() {
+      loadState();
+      applySettings();
+
+      if (state.content) {
+        renderWords();
+        placeCursorAtEnd();
+      }
+
+      wireEvents();
+      editor.focus();
+    }
+
+    init();
+  </script>
+</body>
+</html>
