@@ -60,6 +60,7 @@
       padding: 3rem;
       display: flex;
       align-items: flex-start;
+      overflow: hidden;
     }
 
     #editor {
@@ -526,7 +527,8 @@
 
     // ── DOM refs ───────────────────────────────────────────────────────────────
 
-    const editor        = document.getElementById('editor');
+    const editor          = document.getElementById('editor');
+    const editorContainer = document.getElementById('editor-container');
     const wordCountEl   = document.getElementById('word-count');
     const settingsBtn   = document.getElementById('settings-btn');
     const settingsPanel = document.getElementById('settings-panel');
@@ -672,7 +674,28 @@
       editor.innerHTML = '';
       editor.appendChild(fragment);
 
+      trimOverflow();
       updateWordCount(totalWords);
+    }
+
+    // Hide word spans from the top until content fits inside the container.
+    // Skipped in typewriter mode (single-line, handled by its own layout).
+    function trimOverflow() {
+      const isTypewriter = state.settings.mode === 'blankpast' && state.settings.blankPastStyle === 'typewriter';
+      if (isTypewriter) return;
+
+      const cs            = window.getComputedStyle(editorContainer);
+      const availableH    = editorContainer.clientHeight
+                            - parseFloat(cs.paddingTop)
+                            - parseFloat(cs.paddingBottom);
+
+      if (editor.scrollHeight <= availableH) return;
+
+      const spans = editor.querySelectorAll('.word');
+      for (const span of spans) {
+        if (editor.scrollHeight <= availableH) break;
+        span.style.display = 'none';
+      }
     }
 
     function updateWordCount(count) {
