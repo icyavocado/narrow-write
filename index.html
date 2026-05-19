@@ -153,6 +153,10 @@
 
     body.mode-blankpast.style-typewriter #editor {
       width: 100%;             /* fill the left-half container */
+      min-width: 0;            /* flex children default to min-width:auto, which lets
+                                  the div expand to fit nowrap text wider than the
+                                  container — overriding that keeps the width truly fixed */
+      overflow: hidden;        /* clip old text scrolling left; cursor stays at right edge */
       white-space: nowrap;     /* single line — no wrapping */
       word-break: normal;
       text-align: right;       /* cursor pinned to right edge = screen center */
