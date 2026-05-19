@@ -864,10 +864,10 @@
       });
 
       document.addEventListener('click', e => {
-        if (!isSettingsOpen()) return;
+        if (settingsBtn.contains(e.target)) return;
         if (settingsPanel.contains(e.target)) return;
-        if (e.target === settingsBtn) return;
-        closeSettings();
+        if (isSettingsOpen()) closeSettings();
+        editor.focus();
       });
 
       sVisibleWordsVal.addEventListener('blur',    onVisibleWordsValInput);
