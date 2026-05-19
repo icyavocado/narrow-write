@@ -831,8 +831,13 @@
     // ── Cursor ─────────────────────────────────────────────────────────────────
 
     function placeCursorAtEnd() {
-      const range = document.createRange();
-      range.selectNodeContents(editor);
+      const range    = document.createRange();
+      const lastSpan = editor.lastElementChild;
+      // Collapse into the last span, not after it.
+      // Collapsing after the span causes Firefox/Safari to insert the next
+      // typed character as a stray text node directly in #editor rather than
+      // inside the span, leading to characters appearing twice.
+      range.selectNodeContents(lastSpan ?? editor);
       range.collapse(false);
 
       const sel = window.getSelection();
