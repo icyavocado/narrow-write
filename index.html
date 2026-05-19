@@ -183,13 +183,14 @@
       right: 1rem;
       background: none;
       border: none;
-      padding: 0.375rem;
+      padding: 0.75rem;
       cursor: pointer;
       color: var(--muted);
       line-height: 0;
       transition: color 0.2s, opacity 0.2s;
       opacity: 0.5;
       z-index: 200;
+      touch-action: manipulation;
     }
 
     #theme-btn {
@@ -198,13 +199,14 @@
       left: 1rem;
       background: none;
       border: none;
-      padding: 0.375rem;
+      padding: 0.75rem;
       cursor: pointer;
       color: var(--muted);
       line-height: 0;
       transition: color 0.2s, opacity 0.2s;
       opacity: 0.5;
       z-index: 200;
+      touch-action: manipulation;
     }
 
     #settings-btn:hover,
@@ -1139,6 +1141,12 @@
       editor.addEventListener('input',   handleInput);
       editor.addEventListener('keydown', handleKeydown);
       editor.addEventListener('paste',   handlePaste);
+
+      settingsBtn.addEventListener('touchstart', e => {
+        e.preventDefault();   // suppress the ghost click Android generates after touch
+        e.stopPropagation();
+        isSettingsOpen() ? closeSettings() : openSettings();
+      }, { passive: false });
 
       settingsBtn.addEventListener('click', e => {
         e.stopPropagation();
