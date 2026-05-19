@@ -948,8 +948,8 @@
           <button class="action-btn" id="cancel-clear-btn">Cancel</button>
         </div>
       `;
-      document.getElementById('confirm-clear-btn').addEventListener('click', confirmClear);
-      document.getElementById('cancel-clear-btn').addEventListener('click', resetClearArea);
+      document.getElementById('confirm-clear-btn').addEventListener('click', e => { e.stopPropagation(); confirmClear(); });
+      document.getElementById('cancel-clear-btn').addEventListener('click', e => { e.stopPropagation(); resetClearArea(); });
     }
 
     function confirmClear() {
@@ -964,7 +964,7 @@
 
     function resetClearArea() {
       clearArea.innerHTML = `<button class="action-btn danger" id="clear-btn">Clear document</button>`;
-      document.getElementById('clear-btn').addEventListener('click', showClearConfirm);
+      document.getElementById('clear-btn').addEventListener('click', e => { e.stopPropagation(); showClearConfirm(); });
     }
 
     // ── Input handling ─────────────────────────────────────────────────────────
@@ -1202,7 +1202,7 @@
         if (state.settings.theme === 'system') applyTheme();
       });
       copyBtn.addEventListener('click',        copyAll);
-      document.getElementById('clear-btn').addEventListener('click', showClearConfirm);
+      document.getElementById('clear-btn').addEventListener('click', e => { e.stopPropagation(); showClearConfirm(); });
     }
 
     // ── Startup ────────────────────────────────────────────────────────────────
