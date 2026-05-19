@@ -1,0 +1,31 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'ai.narrowwrite'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "ai.narrowwrite"
+        minSdk 24
+        targetSdk 34
+        versionCode = project.findProperty('versionCode')?.toInteger() ?: 1
+        versionName = project.findProperty('versionName') ?: '0.0.1'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildTypes {
+        debug {
+            debuggable true
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+}
