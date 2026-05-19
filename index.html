@@ -43,8 +43,8 @@
       --popover-bg: #f0ede8;
     }
 
-    /* High contrast — designed for LCD / e-reader screens */
-    [data-theme="hc"] {
+    /* High contrast light — white bg, black text */
+    [data-theme="hc-light"] {
       --bg:           #ffffff;
       --text:         #000000;
       --muted:        #000000;
@@ -52,6 +52,17 @@
       --popover-bg:   #ffffff;
       --haze-opacity: 1;
       --fade:         0ms;   /* no transitions — prevents e-ink ghosting */
+    }
+
+    /* High contrast dark — black bg, white text */
+    [data-theme="hc-dark"] {
+      --bg:           #000000;
+      --text:         #ffffff;
+      --muted:        #ffffff;
+      --border:       #ffffff;
+      --popover-bg:   #000000;
+      --haze-opacity: 1;
+      --fade:         0ms;
     }
 
     /* ── Reset ─────────────────────────────────────────────────────── */
@@ -111,7 +122,7 @@
     }
 
     /* HC: replace blur with full hide — no blur artifacts on e-ink/LCD */
-    [data-theme="hc"] body.mode-narrowwrite #haze-group {
+    :is([data-theme="hc-light"], [data-theme="hc-dark"]) body.mode-narrowwrite #haze-group {
       filter: none;
       opacity: 0;
       will-change: auto;
@@ -179,8 +190,8 @@
     #settings-btn:hover { opacity: 1; color: var(--text); }
 
     /* HC: button and word count always fully visible */
-    [data-theme="hc"] #settings-btn      { opacity: 1; color: var(--text); }
-    [data-theme="hc"] #word-count        { opacity: 1; color: var(--text); }
+    :is([data-theme="hc-light"], [data-theme="hc-dark"]) #settings-btn { opacity: 1; color: var(--text); }
+    :is([data-theme="hc-light"], [data-theme="hc-dark"]) #word-count   { opacity: 1; color: var(--text); }
 
     /* ── Settings popover ──────────────────────────────────────────── */
     #settings-panel {
@@ -503,7 +514,8 @@
         <option value="system">System</option>
         <option value="dark">Dark</option>
         <option value="light">Light</option>
-        <option value="hc">High Contrast</option>
+        <option value="hc-light">HC Light</option>
+        <option value="hc-dark">HC Dark</option>
       </select>
     </div>
 
