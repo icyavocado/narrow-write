@@ -90,12 +90,6 @@
       transition: opacity var(--fade), filter var(--fade);
     }
 
-    /* struck characters inside a word span */
-    .word s {
-      text-decoration: line-through;
-      text-decoration-color: inherit;
-      text-decoration-thickness: 1px;
-    }
 
     /* narrowwrite mode: one blur on the group container → single GPU op */
     body.mode-narrowwrite #haze-group {
@@ -608,54 +602,15 @@
       return 0;
     }
 
-    // ── Struck character helpers ───────────────────────────────────────────────
-
-    // Parse a string containing U+0336 combining chars into {ch, struck} objects
-    function parseChars(text) {
-      const chars = [];
-      let i = 0;
-
-      while (i < text.length) {
-        const struck = i + 1 < text.length && text[i + 1] === '\u0336';
-        chars.push({ ch: text[i], struck });
-        i += struck ? 2 : 1;
-      }
-
-      return chars;
-    }
-
-    // Add a strikethrough to the last non-struck, non-whitespace character
-    function addStrike() {
-      const chars = parseChars(state.content);
-
-      for (let i = chars.length - 1; i >= 0; i--) {
-        if (chars[i].struck) continue;
-        if (/\s/.test(chars[i].ch)) continue;
-        chars[i].struck = true;
-        break;
-      }
-
-      state.content = chars.map(c => c.struck ? c.ch + '\u0336' : c.ch).join('');
-    }
-
-    // Build a .word span, rendering struck chars as <s> elements
+    // Build a .word span for the given token
     function renderToken(token, dataState) {
       const span = document.createElement('span');
       span.className = 'word';
       span.dataset.state = dataState;
 
-      parseChars(token).forEach(({ ch, struck }) => {
-        // Use non-breaking space for display so trailing spaces aren't collapsed
-        // by the browser (matters in right-aligned typewriter mode)
-        const displayCh = ch === ' ' ? '\u00a0' : ch;
-        if (!struck) {
-          span.appendChild(document.createTextNode(displayCh));
-          return;
-        }
-        const s = document.createElement('s');
-        s.textContent = displayCh;
-        span.appendChild(s);
-      });
+      // Use non-breaking space so trailing spaces aren't collapsed
+      // (matters in right-aligned typewriter mode)
+      span.textContent = token.replace(/ /g, '\u00a0');
 
       return span;
     }
@@ -685,10 +640,8 @@
       // Applies when the user typed a character within the current word:
       //   • token count unchanged  → no word boundary crossed
       //   • visibleFrom unchanged  → visible window didn't shift
-      //   • not typewriter         → typewriter needs full rebuild (struck chars)
       //   • span ref valid         → we have a live node to update
       if (
-        !isTypewriter &&
         _currentWordSpan &&
         tokens.length === _renderTokenCount &&
         visibleFrom  === _renderVisibleFrom
@@ -885,15 +838,7 @@
     // ── Input handling ─────────────────────────────────────────────────────────
 
     function handleInput(e) {
-      const isTypewriter = state.settings.mode === 'blankpast' && state.settings.blankPastStyle === 'typewriter';
-
-      if (isTypewriter) {
-        // Never read from DOM in typewriter mode — struck chars live in state.content
-        // as U+0336 combining chars, which the DOM can't round-trip through textContent
-        if (e.data) state.content += e.data;
-      } else {
-        state.content = editor.textContent;
-      }
+      state.content = editor.textContent;
 
       renderWords();
       placeCursorAtEnd();
@@ -911,15 +856,6 @@
         return;
       }
 
-      // Intercept Backspace in Typewriter — strike the last char instead of deleting
-      if (state.settings.mode === 'blankpast' && state.settings.blankPastStyle === 'typewriter' && e.key === 'Backspace') {
-        e.preventDefault();
-        addStrike();
-        renderWords();
-        placeCursorAtEnd();
-        scheduleSave();
-        return;
-      }
     }
 
     function handlePaste(e) {
