@@ -931,6 +931,10 @@
         if (settingsPanel.contains(e.target)) return;
         if (isSettingsOpen()) closeSettings();
         editor.focus();
+        // In typewriter mode the cursor must always sit at the end (screen centre).
+        // Override wherever the browser placed it from the click.
+        const isTypewriter = state.settings.mode === 'blankpast' && state.settings.blankPastStyle === 'typewriter';
+        if (isTypewriter) placeCursorAtEnd();
       });
 
       sVisibleWordsVal.addEventListener('blur',    onVisibleWordsValInput);
