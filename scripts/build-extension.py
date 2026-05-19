@@ -96,7 +96,7 @@ print('  wrote index.html')
 # ── Icons from nw.png ─────────────────────────────────────────────────────────
 # Add dark background (#1a1a1a) so the icon is visible on light toolbars.
 
-src_icon = root / 'nw.png'
+src_icon = root / 'assets' / 'nw.png'
 sizes    = [16, 48, 128]
 
 try:
