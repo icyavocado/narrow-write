@@ -963,7 +963,61 @@
     // ── Input handling ─────────────────────────────────────────────────────────
 
     function handleInput(e) {
-      state.content = editor.textContent;
+      // Use InputEvent API to update state.content WITHOUT reading the DOM.
+      // Reading editor.textContent inside an input handler causes Firefox/Safari
+      // to re-apply queued input events on the rebuilt DOM, producing exponential
+      // character duplication ("Whhaha thhehe…"). By deriving the new content
+      // from e.inputType + e.data instead, we never touch the stale DOM.
+      const type = e.inputType ?? '';
+
+      // Intermediate IME composition — text not committed yet; skip.
+      // The final commit arrives as insertFromComposition → default branch.
+      if (type === 'insertCompositionText') return;
+
+      switch (type) {
+        case 'insertText':
+          state.content += (e.data ?? '');
+          break;
+
+        case 'insertParagraph':
+        case 'insertLineBreak':
+          // blankpast mode intercepts Enter in keydown (preventDefault),
+          // so this only fires in narrowwrite mode — treat as newline.
+          state.content += '\n';
+          break;
+
+        case 'deleteContentBackward':
+          if (state.content.length === 0) return;
+          state.content = state.content.slice(0, -1);
+          break;
+
+        case 'deleteContentForward':
+        case 'deleteWordForward':
+          // Cursor is always at end; nothing exists after it.
+          return;
+
+        case 'deleteWordBackward':
+          if (state.content.length === 0) return;
+          // Remove the last word plus any trailing whitespace after it.
+          state.content = state.content.replace(/\S+\s*$/, '');
+          break;
+
+        case 'deleteSoftLineBackward':
+        case 'deleteHardLineBackward': {
+          if (state.content.length === 0) return;
+          const nl = state.content.lastIndexOf('\n');
+          state.content = nl >= 0 ? state.content.slice(0, nl) : '';
+          break;
+        }
+
+        default:
+          // Undo, redo, drag-drop, IME commit, cut, etc.
+          // These are infrequent — falling back to the DOM here is safe
+          // because the duplication bug is caused by rapid fire insertText
+          // events, not by one-off operations like undo.
+          state.content = editor.textContent.replace(/\u00a0/g, ' ');
+          break;
+      }
 
       renderWords();
       placeCursorAtEnd();
