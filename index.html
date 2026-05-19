@@ -492,7 +492,14 @@
         <option value="Inter">Inter</option>
         <option value="DM Sans">DM Sans</option>
         <option value="JetBrains Mono">JetBrains Mono</option>
+        <option value="custom">Custom…</option>
       </select>
+    </div>
+
+    <!-- Custom font name (shown only when Custom… is selected) -->
+    <div class="setting-row" id="custom-font-row" style="display:none">
+      <input type="text" class="slider-val" id="s-custom-font"
+             placeholder="Font name, e.g. Georgia" aria-label="Custom font name">
     </div>
 
     <!-- Font size -->
@@ -549,6 +556,7 @@
         mode:           'narrowwrite',
         blankPastStyle: 'classic',
         fontFamily:     'Merriweather',
+        customFont:     '',
         fontSize:       18,
         lineSpacing:    1.8,
         theme:          'dark',
@@ -569,6 +577,8 @@
     const sStyleRow        = document.getElementById('s-style-row');
     const sStyleBtns       = document.querySelectorAll('.style-btn');
     const sFont            = document.getElementById('s-font');
+    const sCustomFontRow   = document.getElementById('custom-font-row');
+    const sCustomFontVal   = document.getElementById('s-custom-font');
     const sFontSizeVal     = document.getElementById('s-font-size-val');
     const sLineSpacingVal  = document.getElementById('s-line-spacing-val');
     const sTheme           = document.getElementById('s-theme');
@@ -779,8 +789,11 @@
     }
 
     function applyEditorStyles() {
-      const { fontFamily, fontSize, lineSpacing } = state.settings;
-      editor.style.fontFamily = fontStacks[fontFamily] || fontStacks['Merriweather'];
+      const { fontFamily, customFont, fontSize, lineSpacing } = state.settings;
+      const ff = fontFamily === 'custom'
+        ? (customFont ? `'${customFont}', serif` : "'Merriweather', Georgia, serif")
+        : (fontStacks[fontFamily] || fontStacks['Merriweather']);
+      editor.style.fontFamily = ff;
       editor.style.fontSize   = `${fontSize}px`;
       editor.style.lineHeight = lineSpacing;
     }
@@ -800,6 +813,8 @@
       sStyleRow.style.display   = s.mode === 'blankpast' ? 'flex' : 'none';
       sStyleBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.style === s.blankPastStyle));
       sFont.value               = s.fontFamily;
+      sCustomFontRow.style.display = s.fontFamily === 'custom' ? 'block' : 'none';
+      sCustomFontVal.value      = s.customFont || '';
       sFontSizeVal.value        = s.fontSize;
       sLineSpacingVal.value     = s.lineSpacing.toFixed(1);
       sTheme.value              = s.theme;
@@ -934,7 +949,14 @@
 
     function onFontChange() {
       state.settings.fontFamily = sFont.value;
-      editor.style.fontFamily = fontStacks[state.settings.fontFamily];
+      sCustomFontRow.style.display = sFont.value === 'custom' ? 'block' : 'none';
+      applyEditorStyles();
+      scheduleSave();
+    }
+
+    function onCustomFontInput() {
+      state.settings.customFont = sCustomFontVal.value.trim();
+      applyEditorStyles();
       scheduleSave();
     }
 
@@ -1007,6 +1029,9 @@
       sModeBtns.forEach(btn  => btn.addEventListener('click', () => onModeChange(btn.dataset.mode)));
       sStyleBtns.forEach(btn => btn.addEventListener('click', () => onStyleChange(btn.dataset.style)));
       sFont.addEventListener('change',         onFontChange);
+      sCustomFontVal.addEventListener('input',   onCustomFontInput);
+      sCustomFontVal.addEventListener('blur',    onCustomFontInput);
+      sCustomFontVal.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); onCustomFontInput(); sCustomFontVal.blur(); } });
       sFontSizeVal.addEventListener('blur',    onFontSizeValInput);
       sFontSizeVal.addEventListener('keydown', e => onSliderValKeydown(e, onFontSizeValInput));
       sLineSpacingVal.addEventListener('blur',    onLineSpacingValInput);
