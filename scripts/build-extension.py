@@ -73,18 +73,11 @@ PICO_URL = 'https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.
 PICO_CDN = 'href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css"'
 PICO_LOCAL = 'href="pico.classless.min.css"'
 
-# Cache locally in repo root to avoid re-downloading
-cache = root / 'pico.classless.min.css'
-if cache.exists():
-    shutil.copy(cache, build / 'pico.classless.min.css')
-    print('  copied pico.classless.min.css (cached)')
-else:
-    print('  downloading pico.classless.min.css …')
-    with urllib.request.urlopen(PICO_URL) as r:
-        data = r.read()
-    (build / 'pico.classless.min.css').write_bytes(data)
-    cache.write_bytes(data)          # cache for next run
-    print('  downloaded pico.classless.min.css')
+print('  downloading pico.classless.min.css …')
+with urllib.request.urlopen(PICO_URL) as r:
+    data = r.read()
+(build / 'pico.classless.min.css').write_bytes(data)
+print('  downloaded pico.classless.min.css')
 
 html = html.replace(PICO_CDN, PICO_LOCAL)
 
