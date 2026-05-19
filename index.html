@@ -659,17 +659,22 @@
       return span;
     }
 
+    // Max tokens to render before the visible window.
+    // Caps DOM size regardless of how much content exists above the fold.
+    const RENDER_BUFFER = 800;
+
     function renderWords() {
       const tokens      = tokenise(state.content);
       const totalWords  = countWords(tokens);
       const visibleFrom = findVisibleStart(tokens, state.settings.visibleWords);
 
-      const fragment = document.createDocumentFragment();
+      // Only render from renderFrom — skip tokens that are too far above the fold
+      const renderFrom = Math.max(0, visibleFrom - RENDER_BUFFER);
 
-      tokens.forEach((token, i) => {
-        const dataState = i >= visibleFrom ? 'visible' : 'hidden';
-        fragment.appendChild(renderToken(token, dataState));
-      });
+      const fragment = document.createDocumentFragment();
+      for (let i = renderFrom; i < tokens.length; i++) {
+        fragment.appendChild(renderToken(tokens[i], i >= visibleFrom ? 'visible' : 'hidden'));
+      }
 
       editor.innerHTML = '';
       editor.appendChild(fragment);
@@ -679,22 +684,36 @@
     }
 
     // Hide word spans from the top until content fits inside the container.
+    // Uses batch reads then batch writes to avoid layout thrashing.
     // Skipped in typewriter mode (single-line, handled by its own layout).
     function trimOverflow() {
       const isTypewriter = state.settings.mode === 'blankpast' && state.settings.blankPastStyle === 'typewriter';
       if (isTypewriter) return;
 
-      const cs            = window.getComputedStyle(editorContainer);
-      const availableH    = editorContainer.clientHeight
-                            - parseFloat(cs.paddingTop)
-                            - parseFloat(cs.paddingBottom);
+      const cs         = window.getComputedStyle(editorContainer);
+      const availableH = editorContainer.clientHeight
+                         - parseFloat(cs.paddingTop)
+                         - parseFloat(cs.paddingBottom);
 
       if (editor.scrollHeight <= availableH) return;
 
-      const spans = editor.querySelectorAll('.word');
-      for (const span of spans) {
-        if (editor.scrollHeight <= availableH) break;
-        span.style.display = 'none';
+      const spans  = Array.from(editor.querySelectorAll('.word'));
+      const excess = editor.scrollHeight - availableH;
+
+      // Batch reads — no DOM writes between these, so browser reuses one layout pass
+      const heights = spans.map(s => s.getBoundingClientRect().height);
+
+      // Find how many spans to hide from the top to cover the excess
+      let accum = 0, hideCount = 0;
+      for (let i = 0; i < heights.length; i++) {
+        if (accum >= excess) break;
+        accum += heights[i];
+        hideCount++;
+      }
+
+      // Batch writes
+      for (let i = 0; i < hideCount; i++) {
+        spans[i].style.display = 'none';
       }
     }
 
