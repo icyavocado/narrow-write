@@ -556,13 +556,6 @@
       </select>
     </div>
 
-    <!-- Typing sounds (wired up when audio file is provided) -->
-    <div class="setting-row">
-      <div class="toggle-row">
-        <span class="setting-label" style="margin:0">Typing sounds</span>
-        <input type="checkbox" id="s-sounds" role="switch" disabled title="Coming soon">
-      </div>
-    </div>
 
     <hr class="setting-divider">
 
@@ -590,7 +583,6 @@
         fontSize:       18,
         lineSpacing:    1.8,
         theme:          'dark',
-        typingSounds:   false,
       },
     };
 
@@ -612,7 +604,6 @@
     const sFontSizeVal     = document.getElementById('s-font-size-val');
     const sLineSpacingVal  = document.getElementById('s-line-spacing-val');
     const sTheme           = document.getElementById('s-theme');
-    const sSounds          = document.getElementById('s-sounds');
     const copyBtn          = document.getElementById('copy-btn');
     const clearArea        = document.getElementById('clear-area');
 
@@ -859,7 +850,6 @@
       sFontSizeVal.value        = s.fontSize;
       sLineSpacingVal.value     = s.lineSpacing.toFixed(1);
       sTheme.value              = s.theme;
-      sSounds.checked           = s.typingSounds;
     }
 
     function applySettings() {
