@@ -268,6 +268,67 @@
       border-color: transparent;
     }
 
+    /* Mode picker */
+    .mode-picker {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .mode-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.25rem;
+      padding: 0.5rem 0.6rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.15s;
+    }
+
+    .mode-btn.active { border-color: var(--text); }
+
+    .mode-name {
+      font-size: 0.75rem;
+      font-family: 'Inter', sans-serif;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .mode-desc {
+      font-size: 0.62rem;
+      color: var(--muted);
+      font-family: 'Inter', sans-serif;
+      line-height: 1.3;
+    }
+
+    /* Blank Past style sub-picker */
+    .style-picker {
+      display: flex;
+      gap: 0.4rem;
+    }
+
+    .style-btn {
+      flex: 1;
+      padding: 0.25rem 0.5rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.72rem;
+      font-family: 'Inter', sans-serif;
+      color: var(--muted);
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .style-btn.active {
+      border-color: var(--text);
+      color: var(--text);
+    }
+
     /* Toggle rows */
     .toggle-row {
       display: flex;
@@ -367,28 +428,28 @@
   <!-- Settings popover -->
   <div id="settings-panel" role="dialog" aria-label="Settings">
 
+    <!-- Mode picker -->
+    <div class="setting-row mode-picker">
+      <button class="mode-btn active" data-mode="narrowwrite">
+        <span class="mode-name">Narrow Write</span>
+        <span class="mode-desc">Blurs words behind you</span>
+      </button>
+      <button class="mode-btn" data-mode="blankpast">
+        <span class="mode-name">Blank Past</span>
+        <span class="mode-desc">Past words disappear</span>
+      </button>
+    </div>
+
+    <!-- Blank Past style sub-picker (hidden unless Blank Past active) -->
+    <div class="setting-row style-picker" id="s-style-row" style="display:none">
+      <button class="style-btn active" data-style="classic">Classic</button>
+      <button class="style-btn" data-style="typewriter">Typewriter</button>
+    </div>
+
     <!-- Visible words -->
     <div class="setting-row">
       <span class="setting-label">Visible words</span>
       <input type="text" class="slider-val" id="s-visible-words-val" value="10" aria-label="Visible words value">
-    </div>
-
-    <!-- Mode -->
-    <div class="setting-row">
-      <span class="setting-label">Mode</span>
-      <select id="s-mode">
-        <option value="narrowwrite">Narrow Write</option>
-        <option value="blankpast">Blank Past</option>
-      </select>
-    </div>
-
-    <!-- Blank Past style (shown only in Blank Past mode) -->
-    <div class="setting-row" id="s-style-row">
-      <span class="setting-label">Blank Past style</span>
-      <select id="s-style">
-        <option value="classic">Classic</option>
-        <option value="typewriter">Typewriter</option>
-      </select>
     </div>
 
     <!-- Font family -->
@@ -471,9 +532,9 @@
     const settingsPanel = document.getElementById('settings-panel');
 
     const sVisibleWordsVal = document.getElementById('s-visible-words-val');
-    const sMode            = document.getElementById('s-mode');
+    const sModeBtns        = document.querySelectorAll('.mode-btn');
     const sStyleRow        = document.getElementById('s-style-row');
-    const sStyle           = document.getElementById('s-style');
+    const sStyleBtns       = document.querySelectorAll('.style-btn');
     const sFont            = document.getElementById('s-font');
     const sFontSizeVal     = document.getElementById('s-font-size-val');
     const sLineSpacingVal  = document.getElementById('s-line-spacing-val');
@@ -652,9 +713,9 @@
     function syncControls() {
       const s = state.settings;
       sVisibleWordsVal.value    = s.visibleWords;
-      sMode.value               = s.mode;
-      sStyle.value              = s.blankPastStyle;
-      sStyleRow.style.display   = s.mode === 'blankpast' ? 'block' : 'none';
+      sModeBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === s.mode));
+      sStyleRow.style.display   = s.mode === 'blankpast' ? 'flex' : 'none';
+      sStyleBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.style === s.blankPastStyle));
       sFont.value               = s.fontFamily;
       sFontSizeVal.value        = s.fontSize;
       sLineSpacingVal.value     = s.lineSpacing.toFixed(1);
@@ -786,16 +847,18 @@
 
     // ── Settings change handlers ───────────────────────────────────────────────
 
-    function onModeChange() {
-      state.settings.mode = sMode.value;
-      sStyleRow.style.display = state.settings.mode === 'blankpast' ? 'block' : 'none';
+    function onModeChange(mode) {
+      state.settings.mode = mode;
+      sModeBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode));
+      sStyleRow.style.display = mode === 'blankpast' ? 'flex' : 'none';
       applyBodyClasses();
       renderWords();
       scheduleSave();
     }
 
-    function onStyleChange() {
-      state.settings.blankPastStyle = sStyle.value;
+    function onStyleChange(style) {
+      state.settings.blankPastStyle = style;
+      sStyleBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.style === style));
       applyBodyClasses();
       renderWords();
       scheduleSave();
@@ -869,8 +932,8 @@
 
       sVisibleWordsVal.addEventListener('blur',    onVisibleWordsValInput);
       sVisibleWordsVal.addEventListener('keydown', e => onSliderValKeydown(e, onVisibleWordsValInput));
-      sMode.addEventListener('change',         onModeChange);
-      sStyle.addEventListener('change',        onStyleChange);
+      sModeBtns.forEach(btn  => btn.addEventListener('click', () => onModeChange(btn.dataset.mode)));
+      sStyleBtns.forEach(btn => btn.addEventListener('click', () => onStyleChange(btn.dataset.style)));
       sFont.addEventListener('change',         onFontChange);
       sFontSizeVal.addEventListener('blur',    onFontSizeValInput);
       sFontSizeVal.addEventListener('keydown', e => onSliderValKeydown(e, onFontSizeValInput));
