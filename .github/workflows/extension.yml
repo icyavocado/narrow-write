@@ -1,23 +1,30 @@
-name: Build Chrome Extension
+name: Build & Release Chrome Extension
 
 on:
-  release:
-    types: [published]
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to build (e.g. 1.0.0)'
-        required: true
+  push:
+    branches: [main]
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed to read all tags for version bump
+
+      - name: Compute next version
+        id: ver
+        run: |
+          LATEST=$(git tag --list 'v*.*.*' --sort=-version:refname | head -1)
+          LATEST=${LATEST:-v0.0.0}
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST#v}"
+          NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))"
+          echo "version=${NEXT}"    >> "$GITHUB_OUTPUT"
+          echo "tag=v${NEXT}"       >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-python@v5
         with:
@@ -26,30 +33,21 @@ jobs:
       - name: Install dependencies
         run: pip install pillow
 
-      - name: Resolve version
-        id: ver
-        run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            echo "version=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Build extension
         run: python scripts/build-extension.py --version "${{ steps.ver.outputs.version }}"
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: narrow-write-extension
-          path: dist/*.zip
+      - name: Tag release
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.ver.outputs.tag }}"
+          git push origin "${{ steps.ver.outputs.tag }}"
 
-      - name: Attach zip to release
-        if: github.event_name == 'release'
+      - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${{ steps.ver.outputs.version }}"
-          VERSION="${VERSION#v}"
-          gh release upload "${{ github.event.release.tag_name }}" \
-            "dist/narrow-write-extension-v${VERSION}.zip"
+          gh release create "${{ steps.ver.outputs.tag }}" \
+            "dist/narrow-write-extension-${{ steps.ver.outputs.version }}.zip" \
+            --title "${{ steps.ver.outputs.tag }}" \
+            --notes "Built from [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})"
