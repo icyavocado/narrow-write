@@ -926,8 +926,13 @@
       settingsPanel.classList.remove('visible');
       settingsBtn.setAttribute('aria-expanded', 'false');
       const cleanup = () => settingsPanel.classList.remove('open');
-      settingsPanel.addEventListener('transitionend', cleanup, { once: true });
-      setTimeout(cleanup, 300); // fallback if transitionend never fires (e.g. keyboard resize on mobile)
+      let timer;
+      const onTransitionEnd = () => { clearTimeout(timer); cleanup(); };
+      settingsPanel.addEventListener('transitionend', onTransitionEnd, { once: true });
+      timer = setTimeout(() => {
+        settingsPanel.removeEventListener('transitionend', onTransitionEnd);
+        cleanup();
+      }, 300); // fallback if transitionend never fires (e.g. keyboard resize on mobile)
     }
 
     function isSettingsOpen() {
