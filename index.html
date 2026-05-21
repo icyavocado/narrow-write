@@ -235,12 +235,13 @@
       /* hidden by default */
       display: none;
       opacity: 0;
+      pointer-events: none;
       transform: translateY(-6px);
       transition: opacity 0.15s ease, transform 0.15s ease;
     }
 
     #settings-panel.open    { display: block; }
-    #settings-panel.visible { opacity: 1; transform: translateY(0); }
+    #settings-panel.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
 
     /* ── Setting rows ──────────────────────────────────────────────── */
     .setting-row { margin-bottom: 0.9rem; }
@@ -911,22 +912,26 @@
 
     // ── Settings panel ─────────────────────────────────────────────────────────
 
+    let _settingsOpen = false;
+
     function openSettings() {
+      _settingsOpen = true;
       settingsPanel.classList.add('open');
       settingsBtn.setAttribute('aria-expanded', 'true');
       requestAnimationFrame(() => settingsPanel.classList.add('visible'));
     }
 
     function closeSettings() {
+      _settingsOpen = false;
       settingsPanel.classList.remove('visible');
       settingsBtn.setAttribute('aria-expanded', 'false');
-      settingsPanel.addEventListener('transitionend', () => {
-        settingsPanel.classList.remove('open');
-      }, { once: true });
+      const cleanup = () => settingsPanel.classList.remove('open');
+      settingsPanel.addEventListener('transitionend', cleanup, { once: true });
+      setTimeout(cleanup, 300); // fallback if transitionend never fires (e.g. keyboard resize on mobile)
     }
 
     function isSettingsOpen() {
-      return settingsPanel.classList.contains('open');
+      return _settingsOpen;
     }
 
     // ── Copy all ───────────────────────────────────────────────────────────────
